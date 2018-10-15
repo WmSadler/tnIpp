@@ -13,7 +13,7 @@ run: build
 	./cClient
 
 tidy:
-	rm *.jpg
+	rm -f *.jpg
 
 clean: tidy
 	rm -f cClient cClient.o
