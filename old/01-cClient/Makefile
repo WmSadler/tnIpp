@@ -19,5 +19,6 @@ clean: tidy
 	rm -f cClient cClient.o
 
 clobber: clean
+	rm -f ../bin/cClien
 
 install: 
