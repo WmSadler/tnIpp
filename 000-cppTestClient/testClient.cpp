@@ -42,15 +42,16 @@ int main (int argc, char **argv)
             capW = iniBuffer.GetInteger("ippClient","camWidth",1280);
             capH = iniBuffer.GetInteger("ippClient","camHeight",720);
             syslog(LOG_INFO,"Conncection attempt to ippBroker at %s",ippBrokerUri.c_str());
+            syslog(LOG_INFO,"Using %i,%i camera size",capW,capH);
 
             // starting capture from camera
             VideoCapture cam(0);
             cam.set(CV_CAP_PROP_FRAME_WIDTH,capW);
             cam.set(CV_CAP_PROP_FRAME_HEIGHT,capH);
 
-            namedWindow("VideoImage", WINDOW_AUTOSIZE | WINDOW_OPENGL);
-            namedWindow("Snapped", WINDOW_AUTOSIZE | WINDOW_OPENGL);
-            namedWindow("Processed", WINDOW_AUTOSIZE | WINDOW_OPENGL);
+            namedWindow("VideoImage", WINDOW_AUTOSIZE);
+            namedWindow("Snapped", WINDOW_AUTOSIZE);
+            namedWindow("Processed", WINDOW_AUTOSIZE);
 
             int keyPress;
             bool done = false;
@@ -73,7 +74,6 @@ int main (int argc, char **argv)
                     imencode(".jpeg",imgRawCap,imgJpeg);
                     imdecode(imgJpeg,0,&imgPostProc);
                     imwrite("test2.jpg",imgPostProc);
-                    //imdecode(jpgImg,0,&ippImg);
                 }
 
                 std::time_t tNow = std::time(0);
@@ -84,8 +84,8 @@ int main (int argc, char **argv)
                         cv::Scalar(0,0,0));
 
                 imshow("VideoImage", imgRawCap);
-                //imshow("Snapped", imdecode(jpgImg,0));
-                //imshow("Processed", ippImg);
+                imshow("Snapped", imgJpeg);
+                imshow("Processed", imgPostProc);
                 keyPress = waitKey(10);
                 done = (keyPress==27);
             }

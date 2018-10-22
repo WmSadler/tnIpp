@@ -1,6 +1,7 @@
 bin/*
 testClient
 eTestSvr
+experiment
 
 *.jpg
 *.o
