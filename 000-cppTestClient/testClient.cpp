@@ -12,12 +12,13 @@
 
 using namespace cv;
 using std::string;
-using std::cout;using std::cerr;using std::cerr;
+using std::cout;using std::cerr;using std::cerr; using std::endl;
 using std::exception;
 
 int main (int argc, char **argv)
 {
     int returnStatus = 0;
+    int rc = 0;
 
     string ippBrokerIp, ippBrokerPort, ippBrokerUri;
     int capW, capH;
@@ -47,32 +48,44 @@ int main (int argc, char **argv)
             cam.set(CV_CAP_PROP_FRAME_WIDTH,capW);
             cam.set(CV_CAP_PROP_FRAME_HEIGHT,capH);
 
-            namedWindow("RawImage", WINDOW_AUTOSIZE | WINDOW_OPENGL);
-            namedWindow("IppReturn", WINDOW_AUTOSIZE | WINDOW_OPENGL);
+            namedWindow("VideoImage", WINDOW_AUTOSIZE | WINDOW_OPENGL);
+            namedWindow("Snapped", WINDOW_AUTOSIZE | WINDOW_OPENGL);
+            namedWindow("Processed", WINDOW_AUTOSIZE | WINDOW_OPENGL);
 
             int keyPress;
             bool done = false;
-            Mat rawImage, ippImage;
+            Mat imgRawCap(capH,capW,CV_8UC4);
+            Mat imgPostProc(capH,capW,CV_8UC4);
+            std::vector<uchar> imgJpeg;
             float fps = 0.0;
             int frameCounter=0;
 
             std::time_t tStart = std::time(0);
             while (!done) {
-                cam >> rawImage;
+                cam >> imgRawCap;
+                //cout << rawImgBGR.depth() << endl;
                 frameCounter++;
 
                 // send to IPP Here
-                rawImage.copyTo(ippImage);
+                {
+                    //cvtColor(rawImgBGR,rawImgRGB, COLOR_BGR2RGB);
+                    imwrite("test1.jpg",imgRawCap);
+                    imencode(".jpeg",imgRawCap,imgJpeg);
+                    imdecode(imgJpeg,0,&imgPostProc);
+                    imwrite("test2.jpg",imgPostProc);
+                    //imdecode(jpgImg,0,&ippImg);
+                }
 
                 std::time_t tNow = std::time(0);
                 fps = frameCounter / difftime(tNow,tStart);
-                putText(rawImage, cv::format("Avg FPS=%3.1f",fps),
+                putText(imgRawCap, cv::format("Avg FPS=%3.1f",fps),
                         cv::Point(30,30),
                         cv::FONT_HERSHEY_SIMPLEX,1.0,
                         cv::Scalar(0,0,0));
 
-                imshow("RawImage", rawImage);
-                imshow("IppReturn", ippImage);
+                imshow("VideoImage", imgRawCap);
+                //imshow("Snapped", imdecode(jpgImg,0));
+                //imshow("Processed", ippImg);
                 keyPress = waitKey(10);
                 done = (keyPress==27);
             }

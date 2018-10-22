@@ -2,6 +2,7 @@ bin/*
 testClient
 eTestSvr
 
+*.jpg
 *.o
 *.swp
 *.creator*
