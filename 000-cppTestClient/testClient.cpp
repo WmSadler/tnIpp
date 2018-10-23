@@ -8,12 +8,15 @@
 #include <syslog.h>
 #include <zmq.h>
 
+#include <chrono>
+
 #include "../include/zhelpers.hpp"
 #include "../include/INIReader.h"
 
-using namespace zmq;
 using namespace cv;
 using namespace std;
+using chrono::milliseconds;
+using chrono::duration_cast;
 
 int main (int argc, char **argv)
 {
@@ -22,6 +25,7 @@ int main (int argc, char **argv)
 	int keyPress;
 	bool done = false;
 	bool sendToFr;
+	bool showMenu = false;
 
 	Mat imgRawCap;
 	Mat imgPostProc;
@@ -58,50 +62,85 @@ int main (int argc, char **argv)
 			syslog(LOG_INFO,"Using %i,%i camera size",capW,capH);
 
 			// connect to IPP zmq endpoint
-			context_t context();
+			zmq::context_t context(1);
+			zmq::socket_t sendQ(context,ZMQ_REQ);
+			sendQ.connect(ippBrokerUri);
 
 			// starting capture from camera
 			VideoCapture cam(0);
 			cam.set(CV_CAP_PROP_FRAME_WIDTH,capW);
 			cam.set(CV_CAP_PROP_FRAME_HEIGHT,capH);
+			cam.set(CV_CAP_PROP_FPS,120);
 
 			namedWindow("VideoImage", WINDOW_AUTOSIZE|WINDOW_GUI_EXPANDED);
-			namedWindow("Processed", WINDOW_AUTOSIZE);
+			namedWindow("Processed", WINDOW_AUTOSIZE|WINDOW_GUI_EXPANDED);
+			moveWindow("VideoImage",0,0);
+			moveWindow("Processed",capW+2,0);
 
-			std::time_t tStart = std::time(0);
+			time_t tNow;
+			time_t tStart = time(0);
+			string lastProcStatus = "";
+
+			int jpgLen = 0;
+
 			while (!done) {
 				cam >> imgRawCap;
-				//cout << rawImgBGR.depth() << endl;
 				frameCounter++;
+				tNow = time(0);
+				fps = frameCounter / difftime(tNow,tStart);
 
 				if (sendToFr){
+					auto procStart = chrono::high_resolution_clock::now();
+
+					// convert captured image to jpeg
 					imencode(".jpeg",imgRawCap,imgJpeg);
-					// send here
-					imgPostProc = imdecode(imgJpeg,IMREAD_ANYCOLOR|IMREAD_ANYDEPTH);
-				} else{
-					imgPostProc = imgRawCap;
+
+					// send to ipp here
+					jpgLen = imgJpeg.size();
+					zmq::message_t msg(jpgLen);
+					memcpy(msg.data(), imgJpeg.data(),jpgLen);
+					sendQ.send(msg);
+
+					// reply from IPP
+					zmq::message_t imgProcMsg;
+					sendQ.recv(&imgProcMsg);
+					std::vector<uchar> buf(imgProcMsg.size());
+					memcpy(&buf, imgProcMsg.data(),imgProcMsg.size());
+
+					imgPostProc = imdecode(buf,IMREAD_ANYCOLOR|IMREAD_ANYDEPTH);
+					auto procEnd = chrono::high_resolution_clock::now();
+					milliseconds ns = duration_cast<milliseconds>(procEnd - procStart);
+					imshow("Processed", imgPostProc);
+					lastProcStatus = "Proc Time Last Image: "+to_string(ns.count())+" milliseconds";
+					sendToFr = false;
 				}
 
-				std::time_t tNow = std::time(0);
-				fps = frameCounter / difftime(tNow,tStart);
-				asprintf(&fpsNum,"%.1f",fps);
-				if (sendToFr) {
-					displayFps = "SENDING FPS:" + string(fpsNum);
-				} else {
-					displayFps = "LOCAL FPS:" + string(fpsNum);
-				}
+				// build status bar info
+				asprintf(&fpsNum,"%s %.1f %s",sendToFr?"SENDING":"LOCAL",fps,lastProcStatus.c_str());
+				displayFps = string(fpsNum);
 				free(fpsNum);
-				displayStatusBar("VideoImage",displayFps,0);
+				displayStatusBar("VideoImage",displayFps);
+
+				// menu items
+				if (showMenu) {
+					displayOverlay("VideoImage","\nMENU <Enter to Collapse>\n\n"
+												"C or c - Capture and Send\n"
+												"ESC or Q - Exit\n",1);
+				} else {
+					displayOverlay("VideoImage","MENU <Enter to Expand>",1);
+				}
 				imshow("VideoImage", imgRawCap);
-				imshow("Processed", imgPostProc);
 
 				keyPress = waitKey(1);
 				switch (keyPress) {
-					case 's' : sendToFr = !sendToFr;break;
+					case 'C' :
+					case 'c' : sendToFr = !sendToFr;break;
+					case 13 : showMenu=!showMenu;break;
 					case 'q' :
 					case 27 : done = true;break;
 				}
 			}
+			cam.release();
 		} else {
 			syslog(LOG_ERR, "Ini File Exception");
 			returnStatus = -1;
