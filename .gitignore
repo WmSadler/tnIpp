@@ -7,4 +7,6 @@ experiment
 *.o
 *.swp
 *.creator*
-
+*.config
+*.files
+*.includes
