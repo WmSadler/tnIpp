@@ -24,7 +24,9 @@ int main (int argc, char **argv)
 	int rc = 0;
 	int keyPress;
 	bool done = false;
-	bool sendToFr;
+    bool sendToIpp = false;
+    bool continuousSend = true;
+    bool fakeSend = true;
 	bool showMenu = false;
 
 	Mat imgRawCap;
@@ -55,7 +57,6 @@ int main (int argc, char **argv)
 			ippBrokerIp = iniBuffer.Get("ippBroker","ippBrokerIp","");
 			ippBrokerPort = iniBuffer.Get("ippBroker","ippBrokerPort","");
 			ippBrokerUri = "tcp://"+ippBrokerIp+":"+ippBrokerPort;
-			sendToFr = iniBuffer.GetBoolean("ippClient","sendToFr",false);
 			capW = iniBuffer.GetInteger("ippClient","camWidth",1280);
 			capH = iniBuffer.GetInteger("ippClient","camHeight",720);
 			syslog(LOG_INFO,"Conncection attempt to ippBroker at %s",ippBrokerUri.c_str());
@@ -70,7 +71,6 @@ int main (int argc, char **argv)
 			VideoCapture cam(0);
 			cam.set(CV_CAP_PROP_FRAME_WIDTH,capW);
 			cam.set(CV_CAP_PROP_FRAME_HEIGHT,capH);
-            //cam.set(CV_CAP_PROP_FPS,120);
 
 			namedWindow("VideoImage", WINDOW_AUTOSIZE|WINDOW_GUI_EXPANDED);
 			namedWindow("Processed", WINDOW_AUTOSIZE|WINDOW_GUI_EXPANDED);
@@ -89,55 +89,66 @@ int main (int argc, char **argv)
 				tNow = time(0);
 				fps = frameCounter / difftime(tNow,tStart);
 
-				if (sendToFr){
+                if (continuousSend) {sendToIpp=true;}
+                if (sendToIpp){
 					auto procStart = chrono::high_resolution_clock::now();
 
 					// convert captured image to jpeg
 					imencode(".jpeg",imgRawCap,imgJpeg);
 
-					// send to ipp here
-					jpgLen = imgJpeg.size();
-					zmq::message_t msg(jpgLen);
-					memcpy(msg.data(), imgJpeg.data(),jpgLen);
-					sendQ.send(msg);
+                    if (fakeSend) {
+                        imgPostProc = imdecode(imgJpeg,IMREAD_ANYCOLOR|IMREAD_ANYDEPTH);
+                    } else {
+                        // send to ipp here
+                        jpgLen = imgJpeg.size();
+                        zmq::message_t msg(jpgLen);
+                        memcpy(msg.data(), imgJpeg.data(),jpgLen);
+                        sendQ.send(msg);
 
-					// reply from IPP
-					zmq::message_t imgProcMsg;
-					sendQ.recv(&imgProcMsg);
-					std::vector<uchar> buf(imgProcMsg.size());
-					memcpy(&buf, imgProcMsg.data(),imgProcMsg.size());
+                        // reply from IPP
+                        zmq::message_t imgProcMsg;
+                        sendQ.recv(&imgProcMsg);
+                        std::vector<uchar> buf(imgProcMsg.size());
+                        memcpy(&buf, imgProcMsg.data(),imgProcMsg.size());
+                        imgPostProc = imdecode(buf,IMREAD_ANYCOLOR|IMREAD_ANYDEPTH);
+                    }
 
-					imgPostProc = imdecode(buf,IMREAD_ANYCOLOR|IMREAD_ANYDEPTH);
 					auto procEnd = chrono::high_resolution_clock::now();
 					milliseconds ns = duration_cast<milliseconds>(procEnd - procStart);
 					imshow("Processed", imgPostProc);
 					lastProcStatus = "Proc Time Last Image: "+to_string(ns.count())+" milliseconds";
-					sendToFr = false;
+                    sendToIpp = false;
 				}
 
 				// build status bar info
-				asprintf(&fpsNum,"%s %.1f %s",sendToFr?"SENDING":"LOCAL",fps,lastProcStatus.c_str());
+                asprintf(&fpsNum,"Sending: %s To: %s %.1f %s",
+                         continuousSend?"VIDEO":"STILLS",
+                         fakeSend?"LOCAL":"IPP",
+                         fps,
+                         lastProcStatus.c_str());
 				displayFps = string(fpsNum);
 				free(fpsNum);
 				displayStatusBar("VideoImage",displayFps);
 
 				// menu items
 				if (showMenu) {
-					displayOverlay("VideoImage","\nMENU <Enter to Collapse>\n\n"
-												"C or c - Capture and Send\n"
-												"ESC or Q - Exit\n",1);
+                    displayOverlay("VideoImage","\nMENU <Enter to Collapse>\n\n"
+                                                "c - Capture and Send Single Frame\n"
+                                                "o - toggle cOntinuous Send\n"
+                                                "i - toggle Ipp or Local\n"
+                                                "ESC - Exit\n",1);
 				} else {
 					displayOverlay("VideoImage","MENU <Enter to Expand>",1);
 				}
 				imshow("VideoImage", imgRawCap);
 
-				keyPress = waitKey(1);
+                keyPress = waitKey(10);
 				switch (keyPress) {
-					case 'C' :
-					case 'c' : sendToFr = !sendToFr;break;
-					case 13 : showMenu=!showMenu;break;
-					case 'q' :
-					case 27 : done = true;break;
+                    case 'c' : sendToIpp=!sendToIpp;syslog(LOG_INFO,"Send Still");break;
+                    case 'o' : continuousSend=!continuousSend;syslog(LOG_INFO,"Toggle Continuous");break;
+                    case 'i' : fakeSend=!fakeSend;syslog(LOG_INFO,"Toggle IPP");break;
+                    case 13 : showMenu=!showMenu;break;
+                    case 27 : done = true;break;
 				}
 			}
 			cam.release();
