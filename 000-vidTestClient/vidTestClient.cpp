@@ -24,9 +24,9 @@ int main (int argc, char **argv)
 	bool showMenu = false;
 
 	Mat imgRawCap;
-    int capW=1280;
-    int capH=1024;
-    int capFps=60;
+    int capW=640;
+    int capH=480;
+    int capFps=10;
 
 	float fps = 0.0;
 	string displayFps;
@@ -61,7 +61,7 @@ int main (int argc, char **argv)
         asprintf(&fpsNum,"%s %.1f %s",sendToFr?"SENDING":"LOCAL",fps,lastProcStatus.c_str());
         displayFps = string(fpsNum);
         free(fpsNum);
-        displayStatusBar("VideoImage",displayFps);
+        displayStatusBar("Simple Capture",displayFps);
 
         imshow("Simple Capture", imgRawCap);
 

@@ -70,7 +70,7 @@ int main (int argc, char **argv)
 			VideoCapture cam(0);
 			cam.set(CV_CAP_PROP_FRAME_WIDTH,capW);
 			cam.set(CV_CAP_PROP_FRAME_HEIGHT,capH);
-			cam.set(CV_CAP_PROP_FPS,120);
+            //cam.set(CV_CAP_PROP_FPS,120);
 
 			namedWindow("VideoImage", WINDOW_AUTOSIZE|WINDOW_GUI_EXPANDED);
 			namedWindow("Processed", WINDOW_AUTOSIZE|WINDOW_GUI_EXPANDED);
