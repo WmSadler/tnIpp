@@ -10,3 +10,4 @@ experiment
 *.config
 *.files
 *.includes
+*.autosave
